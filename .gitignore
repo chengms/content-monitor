@@ -1,5 +1,10 @@
 node_modules/
 .next/
+out/
+dist/
+coverage/
+.turbo/
+*.tsbuildinfo
 
 # local env files
 .env
@@ -17,3 +22,5 @@ pnpm-debug.log*
 # OS/editor
 .DS_Store
 Thumbs.db
+.vscode/
+.idea/

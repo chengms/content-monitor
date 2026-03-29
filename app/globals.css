@@ -1160,12 +1160,233 @@ button {
 }
 
 @media (max-width: 720px) {
-  .timeline-track {
-    grid-auto-columns: minmax(94px, 1fr);
+  .timeline-card-rail {
+    grid-auto-columns: 85%;
   }
 
   .distribution-bar-wrap {
     width: 100%;
+  }
+}
+
+
+
+.overview-view {
+  display: grid;
+  gap: 20px;
+}
+
+.overview-hero-card {
+  display: grid;
+  gap: 18px;
+}
+
+.overview-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.overview-grid {
+  display: grid;
+  gap: 18px;
+}
+
+.overview-grid.top {
+  grid-template-columns: minmax(0, 1.4fr) minmax(320px, 0.8fr);
+}
+
+.overview-grid.middle {
+  grid-template-columns: minmax(0, 1.3fr) minmax(320px, 0.7fr);
+}
+
+.overview-panel {
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  box-shadow: var(--shadow);
+  background: var(--panel);
+  backdrop-filter: blur(16px);
+  padding: 22px;
+}
+
+.overview-panel.wide {
+  min-width: 0;
+}
+
+.overview-nav-card {
+  background: linear-gradient(135deg, rgba(18, 60, 68, 0.08), rgba(255, 255, 255, 0.82));
+}
+
+.run-summary-strip,
+.overview-category-grid,
+.platform-overview-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.run-summary-strip {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: 14px;
+}
+
+.run-summary-card,
+.run-status-card,
+.overview-category-card,
+.overview-trend-card,
+.ranking-card,
+.platform-overview-card {
+  padding: 16px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.74);
+}
+
+.run-status-list,
+.ranking-list,
+.overview-insight-list {
+  display: grid;
+  gap: 12px;
+}
+
+.run-status-card,
+.overview-category-head,
+.overview-category-metrics,
+.platform-overview-head,
+.platform-overview-metrics,
+.overview-trend-top,
+.overview-trend-metrics {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.run-status-meta {
+  display: grid;
+  justify-items: end;
+  gap: 8px;
+}
+
+.overview-status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.overview-status-badge.good {
+  color: #0b6f58;
+  background: rgba(11, 111, 88, 0.12);
+}
+
+.overview-status-badge.warn {
+  color: #8a5a00;
+  background: rgba(184, 139, 50, 0.16);
+}
+
+.overview-status-badge.danger {
+  color: #a53d35;
+  background: rgba(204, 95, 84, 0.16);
+}
+
+.overview-category-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.overview-category-card.priority-high {
+  border: 1px solid rgba(220, 101, 68, 0.28);
+  background: linear-gradient(135deg, rgba(220, 101, 68, 0.08), rgba(255, 255, 255, 0.82));
+}
+
+.priority-pill,
+.enter-category-button {
+  border-radius: 999px;
+  font-weight: 700;
+}
+
+.priority-pill {
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--accent-ink);
+  background: rgba(18, 60, 68, 0.08);
+}
+
+.priority-pill.high {
+  color: #a53d35;
+  background: rgba(220, 101, 68, 0.12);
+}
+
+.priority-pill.mid {
+  color: #8a5a00;
+  background: rgba(184, 139, 50, 0.16);
+}
+
+.overview-category-summary,
+.overview-insight-list p,
+.ranking-card p {
+  margin: 10px 0 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.enter-category-button {
+  margin-top: 14px;
+  border: 0;
+  padding: 10px 14px;
+  color: var(--accent-ink);
+  background: rgba(18, 60, 68, 0.1);
+  cursor: pointer;
+}
+
+.overview-trend-rail {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(140px, 1fr);
+  gap: 10px;
+  overflow-x: auto;
+}
+
+.overview-trend-card.burst {
+  border: 1px solid rgba(220, 101, 68, 0.28);
+}
+
+.overview-trend-bar,
+.platform-overview-bar {
+  height: 8px;
+  margin-top: 12px;
+  border-radius: 999px;
+  background: rgba(18, 60, 68, 0.08);
+  overflow: hidden;
+}
+
+.overview-trend-bar div,
+.platform-overview-bar div {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(212, 122, 56, 0.72), rgba(220, 101, 68, 0.86));
+}
+
+.platform-overview-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+@media (max-width: 1180px) {
+  .overview-metrics-grid,
+  .overview-grid.top,
+  .overview-grid.middle,
+  .run-summary-strip,
+  .overview-category-grid,
+  .platform-overview-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .timeline-card-rail,
+  .overview-trend-rail {
+    grid-auto-columns: 85%;
   }
 }
 
