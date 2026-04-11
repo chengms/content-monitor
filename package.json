@@ -1,22 +1,26 @@
 {
-  "name": "content-monitor-prototype",
-  "version": "0.1.0",
-  "private": true,
-  "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint"
-  },
-  "dependencies": {
-    "next": "15.2.3",
-    "react": "19.0.0",
-    "react-dom": "19.0.0"
-  },
-  "devDependencies": {
-    "@types/node": "22.13.10",
-    "@types/react": "19.0.10",
-    "@types/react-dom": "19.0.4",
-    "typescript": "5.8.2"
-  }
+    "name":  "content-monitor-prototype",
+    "version":  "0.1.0",
+    "private":  true,
+    "scripts":  {
+                    "dev":  "next dev -p 3001",
+                    "build":  "next build",
+                    "start":  "next start",
+                    "lint":  "next lint",
+                    "start:local":  "next start -p 3001",
+                    "serve:local":  "next build \u0026\u0026 next start -p 3001"
+                },
+    "dependencies":  {
+                         "better-sqlite3":  "^11.8.1",
+                         "next":  "15.2.3",
+                         "react":  "19.0.0",
+                         "react-dom":  "19.0.0"
+                     },
+    "devDependencies":  {
+                            "@types/better-sqlite3":  "^7.6.13",
+                            "@types/node":  "22.13.10",
+                            "@types/react":  "19.0.10",
+                            "@types/react-dom":  "19.0.4",
+                            "typescript":  "5.8.2"
+                        }
 }

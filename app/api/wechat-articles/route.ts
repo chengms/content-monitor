@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+ï»¿import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
@@ -97,7 +97,7 @@ async function requestWithRetry(body: Record<string, string | number>) {
       }
     } catch (error) {
       clearTimeout(timeoutId);
-      const message = error instanceof Error ? error.message : "ÉÏÓÎÇëÇóÒì³£";
+      const message = error instanceof Error ? error.message : "ä¸Šæ¸¸è¯·æ±‚å¼‚å¸¸";
       lastResult = { ok: false, status: 502, rawText: "", errorMessage: message, attempt };
 
       if (attempt === MAX_RETRIES) {
@@ -114,14 +114,14 @@ async function requestWithRetry(body: Record<string, string | number>) {
 export async function POST(request: Request) {
   try {
     if (!WECHAT_MONITOR_TOKEN) {
-      return NextResponse.json({ error: "È±ÉÙ WECHAT_MONITOR_TOKEN£¬ÔİÊ±ÎŞ·¨ÇëÇó¹«ÖÚºÅÎÄÕÂ½Ó¿Ú¡£" }, { status: 500 });
+      return NextResponse.json({ error: "ç¼ºå°‘ WECHAT_MONITOR_TOKENï¼Œæš‚æ—¶æ— æ³•è¯·æ±‚å…¬ä¼—å·æ–‡ç« æ¥å£ã€‚" }, { status: 500 });
     }
 
     const body = await request.json();
     const kw = String(body?.kw ?? "").trim();
 
     if (!kw) {
-      return NextResponse.json({ error: "ÇëÊäÈë¹Ø¼ü´ÊºóÔÙËÑË÷¡£" }, { status: 400 });
+      return NextResponse.json({ error: "è¯·è¾“å…¥å…³é”®è¯åå†æœç´¢ã€‚" }, { status: 400 });
     }
 
     const upstreamBody = {
@@ -139,13 +139,13 @@ export async function POST(request: Request) {
     const result = await requestWithRetry(upstreamBody);
 
     if (!result) {
-      return NextResponse.json({ error: "¹«ÖÚºÅÎÄÕÂ½Ó¿ÚÃ»ÓĞ·µ»Ø½á¹û¡£" }, { status: 502 });
+      return NextResponse.json({ error: "å…¬ä¼—å·æ–‡ç« æ¥å£æ²¡æœ‰è¿”å›ç»“æœã€‚" }, { status: 502 });
     }
 
     if (result.errorMessage) {
       return NextResponse.json(
         {
-          error: `ÉÏÓÎ½Ó¿ÚÇëÇóÊ§°Ü£¬ÒÑÖØÊÔ ${result.attempt} ´Î£º${result.errorMessage}`,
+          error: `ä¸Šæ¸¸æ¥å£è¯·æ±‚å¤±è´¥ï¼Œå·²é‡è¯• ${result.attempt} æ¬¡ï¼š${result.errorMessage}`,
           upstreamStatus: result.status
         },
         { status: 502 }
@@ -155,7 +155,7 @@ export async function POST(request: Request) {
     if (!result.rawText.trim()) {
       return NextResponse.json(
         {
-          error: `¹«ÖÚºÅÎÄÕÂ½Ó¿ÚÃ»ÓĞ·µ»ØÄÚÈİ£¬ÒÑÖØÊÔ ${result.attempt} ´Î¡£`,
+          error: `å…¬ä¼—å·æ–‡ç« æ¥å£æ²¡æœ‰è¿”å›å†…å®¹ï¼Œå·²é‡è¯• ${result.attempt} æ¬¡ã€‚`,
           upstreamStatus: result.status
         },
         { status: 502 }
@@ -167,8 +167,8 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error: result.rawText.trim().startsWith("<")
-            ? `ÉÏÓÎ½Ó¿Ú·µ»ØÁË HTML Ò³Ãæ£¬ÒÑÖØÊÔ ${result.attempt} ´Î£¬¿ÉÄÜÊÇ¼øÈ¨Ê§°Ü¡¢·şÎñÒì³£»òÇëÇó±»À¹½Ø¡£`
-            : `ÉÏÓÎ½Ó¿Ú·µ»Ø¸ñÊ½Òì³££¬ÒÑÖØÊÔ ${result.attempt} ´Î£¬ÈÔÎŞ·¨½âÎö¡£`,
+            ? `ä¸Šæ¸¸æ¥å£è¿”å›äº† HTML é¡µé¢ï¼Œå·²é‡è¯• ${result.attempt} æ¬¡ï¼Œå¯èƒ½æ˜¯é‰´æƒå¤±è´¥ã€æœåŠ¡å¼‚å¸¸æˆ–è¯·æ±‚è¢«æ‹¦æˆªã€‚`
+            : `ä¸Šæ¸¸æ¥å£è¿”å›æ ¼å¼å¼‚å¸¸ï¼Œå·²é‡è¯• ${result.attempt} æ¬¡ï¼Œä»æ— æ³•è§£æã€‚`,
           upstreamStatus: result.status,
           upstreamSnippet: snippet
         },
@@ -179,7 +179,7 @@ export async function POST(request: Request) {
     if (!result.ok || result.payload.code !== 0) {
       return NextResponse.json(
         {
-          error: result.payload.msg ?? `¹«ÖÚºÅÎÄÕÂ½Ó¿ÚÇëÇóÊ§°Ü£¬ÒÑÖØÊÔ ${result.attempt} ´Î¡£`,
+          error: result.payload.msg ?? `å…¬ä¼—å·æ–‡ç« æ¥å£è¯·æ±‚å¤±è´¥ï¼Œå·²é‡è¯• ${result.attempt} æ¬¡ã€‚`,
           upstreamStatus: result.status,
           requestId: result.payload.requestId ?? ""
         },
@@ -223,10 +223,11 @@ export async function POST(request: Request) {
       fetchLimit: MAX_ITEMS_PER_FETCH
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "¹«ÖÚºÅÎÄÕÂ½Ó¿ÚÇëÇóÒì³£¡£";
+    const message = error instanceof Error ? error.message : "å…¬ä¼—å·æ–‡ç« æ¥å£è¯·æ±‚å¼‚å¸¸ã€‚";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+
 
 
 
