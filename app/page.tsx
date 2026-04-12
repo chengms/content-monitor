@@ -12,6 +12,7 @@ type PoolStatus = "candidate" | "selected" | "ignored";
 type PlatformOrAll = PlatformKey | "all";
 type TopLevelView = "system-overview" | string;
 type ScheduleType = "manual" | "daily" | "weekly";
+type OverviewTrendMetric = "totalCount" | "peakHeat" | "averageHeat";
 
 type ContentItem = {
   id: string;
@@ -419,6 +420,28 @@ function formatDateTime(value: Date) {
   return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())} ${pad(value.getHours())}:${pad(value.getMinutes())}`;
 }
 
+function buildChartPath(values: number[], width: number, height: number) {
+  if (values.length === 0) return "";
+
+  const max = Math.max(...values, 1);
+  const min = Math.min(...values, 0);
+  const range = max - min || 1;
+  const stepX = values.length === 1 ? width : width / (values.length - 1);
+
+  return values
+    .map((value, index) => {
+      const x = stepX * index;
+      const y = height - ((value - min) / range) * height;
+      return `${index === 0 ? "M" : "L"} ${x.toFixed(2)} ${y.toFixed(2)}`;
+    })
+    .join(" ");
+}
+
+function scrollToSection(sectionId: string) {
+  if (typeof document === "undefined") return;
+  document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
 function computeNextRunAt(scheduleType: ScheduleType, runTime: string, scheduleWeekday: number, now = new Date()) {
   if (scheduleType === "manual" || !runTime) return null;
 
@@ -730,6 +753,9 @@ function ContentTimeline({ days, selectedDay, onSelect, viewMode }: { days: Time
   );
 }
 function SystemOverviewPanel({ categories, onEnterCategory }: { categories: MonitorCategory[]; onEnterCategory: (id: MonitorCategory["id"]) => void }) {
+  const [trendMetric, setTrendMetric] = useState<OverviewTrendMetric>("peakHeat");
+  const [trendRange, setTrendRange] = useState<7 | 14 | 30>(7);
+
   const todayTotals = useMemo(() => {
     const categoryCount = categories.length;
     const totalContents = categories.reduce((sum, category) => sum + (category.timeline[0]?.totalCount ?? 0), 0);
@@ -737,7 +763,14 @@ function SystemOverviewPanel({ categories, onEnterCategory }: { categories: Moni
     const reports = categories.reduce((sum, category) => sum + category.reports.length, 0);
     const successCount = categories.filter((item) => item.runStatus.collect !== "异常").length;
     const anomalies = categories.filter((item) => item.runStatus.collect !== "正常" || item.runStatus.analysis !== "已完成").length;
-    return { categoryCount, totalContents, explosive, reports, successRate: Math.round((successCount / categoryCount) * 100), anomalies };
+    return {
+      categoryCount,
+      totalContents,
+      explosive,
+      reports,
+      successRate: categoryCount > 0 ? Math.round((successCount / categoryCount) * 100) : 0,
+      anomalies
+    };
   }, [categories]);
 
   const topHeat = categories.slice().sort((a, b) => (b.timeline[0]?.peakHeat ?? 0) - (a.timeline[0]?.peakHeat ?? 0));
@@ -746,14 +779,14 @@ function SystemOverviewPanel({ categories, onEnterCategory }: { categories: Moni
 
   const globalTrend = useMemo(() => {
     const maxDays = Math.max(...categories.map((category) => category.timeline.length));
-    return Array.from({ length: Math.min(7, maxDays) }, (_, index) => {
+    return Array.from({ length: Math.min(trendRange, maxDays) }, (_, index) => {
       const date = categories[0]?.timeline[index]?.date ?? "";
       const totalCount = categories.reduce((sum, category) => sum + (category.timeline[index]?.totalCount ?? 0), 0);
       const peakHeat = Math.max(...categories.map((category) => category.timeline[index]?.peakHeat ?? 0));
       const avgHeat = Math.round(categories.reduce((sum, category) => sum + (category.timeline[index]?.averageHeat ?? 0), 0) / categories.length);
       return { date, label: index === 0 ? "今天" : index === 1 ? "昨天" : date.slice(5), totalCount, peakHeat, avgHeat };
     });
-  }, [categories]);
+  }, [categories, trendRange]);
 
   const platformOverview = useMemo(() => {
     return (Object.keys(platformMeta) as PlatformKey[]).map((platform) => {
@@ -779,112 +812,259 @@ function SystemOverviewPanel({ categories, onEnterCategory }: { categories: Moni
     return candidates[0] ? formatDateTime(new Date(candidates[0])) : "手动触发";
   }, [categories]);
 
+  const strongestPlatform = platformOverview.slice().sort((a, b) => b.avgHeat - a.avgHeat)[0];
   const globalInsights = [
-    "今天最值得优先关注的热点方向：团队迁移清单、首页包装公式、商业化表达。",
-    `建议最先进入的分类：${topHeat[0]?.name ?? "暂无"}。`,
-    `最值得继续跟的平台：${platformOverview.slice().sort((a, b) => b.avgHeat - a.avgHeat)[0]?.platform ? platformMeta[platformOverview.slice().sort((a, b) => b.avgHeat - a.avgHeat)[0].platform].label : "暂无"}。`,
-    "系统总览页不直接展开单条内容，是为了先帮助用户判断今天应该先看哪里，再进入具体分类执行。"
+    {
+      title: "今日建议优先关注方向",
+      value: "团队迁移清单、首页包装公式、商业化表达",
+      note: "优先从具备复用潜力和执行确定性的方向切入，先判断是否值得深挖。"
+    },
+    {
+      title: "建议优先进入的分类",
+      value: topHeat[0]?.name ?? "暂无",
+      note: topHeat[0] ? `当前峰值热度 ${topHeat[0]?.timeline[0]?.peakHeat ?? 0}，更适合作为今天的首个深挖入口。`
+        : "当前还没有足够数据给出优先分类。"
+    },
+    {
+      title: "最值得继续跟踪的平台",
+      value: strongestPlatform ? platformMeta[strongestPlatform.platform].label : "暂无",
+      note: strongestPlatform ? `平均热度 ${strongestPlatform.avgHeat}，建议继续跟进该平台的增量内容。`
+        : "当前没有明显领先的平台信号。"
+    }
   ];
+
+  const overviewStats = [
+    { label: "监控分类数", value: todayTotals.categoryCount, note: "覆盖重点方向", icon: "分类" },
+    { label: "今日采集总数", value: todayTotals.totalContents, note: "较昨日持续更新", icon: "采集" },
+    { label: "今日热点数", value: todayTotals.explosive, note: "高热样本待判断", icon: "热点" },
+    { label: "运行成功率", value: `${todayTotals.successRate}%`, note: todayTotals.anomalies === 0 ? "当前运行稳定" : `${todayTotals.anomalies} 项待关注`, icon: "状态" },
+    { label: "已生成报告", value: todayTotals.reports, note: "支持回看总结", icon: "报告" },
+    { label: "异常任务数", value: todayTotals.anomalies, note: todayTotals.anomalies === 0 ? "暂无异常" : "建议尽快处理", icon: "异常" }
+  ];
+
+  const metricValueMap: Record<OverviewTrendMetric, number[]> = {
+    totalCount: globalTrend.map((day) => day.totalCount),
+    peakHeat: globalTrend.map((day) => day.peakHeat),
+    averageHeat: globalTrend.map((day) => day.avgHeat)
+  };
+  const trendPath = buildChartPath(metricValueMap[trendMetric], 560, 180);
+  const latestTrend = metricValueMap[trendMetric][0] ?? 0;
+  const previousTrend = metricValueMap[trendMetric][1] ?? latestTrend;
+  const trendDelta = latestTrend - previousTrend;
+  const trendLabelMap: Record<OverviewTrendMetric, string> = {
+    totalCount: "内容量",
+    peakHeat: "峰值热度",
+    averageHeat: "平均热度"
+  };
 
   return (
     <section className="overview-view">
-      <header className="hero-card overview-hero-card">
-        <div>
-          <span className="eyebrow">System Overview</span>
+      <section className="dashboard-header-card">
+        <div className="dashboard-header-copy">
+          <span className="eyebrow">Operations Home</span>
           <h2>系统总览</h2>
-          <p>查看所有监控分类的运行状态、热点分布与优先处理方向，先判断今天先看哪里，再进入单个分类深挖。</p>
+          <p>先看今天整体情况，再判断优先处理方向、优先进入的分类，以及接下来要继续跟进的平台。</p>
         </div>
-        <div className="overview-metrics-grid">
-          <div className="metric-card"><span>监控分类数</span><strong>{todayTotals.categoryCount}</strong></div>
-          <div className="metric-card"><span>今日采集总数</span><strong>{todayTotals.totalContents}</strong></div>
-          <div className="metric-card"><span>今日爆款数</span><strong>{todayTotals.explosive}</strong></div>
-          <div className="metric-card"><span>运行成功率</span><strong>{todayTotals.successRate}%</strong></div>
-          <div className="metric-card"><span>已生成报告</span><strong>{todayTotals.reports}</strong></div>
-          <div className="metric-card"><span>异常任务数</span><strong>{todayTotals.anomalies}</strong></div>
+        <div className="dashboard-header-actions">
+          <div className="toolbar-group">
+            {[7, 14, 30].map((days) => (
+              <button
+                key={days}
+                type="button"
+                className={cn("soft-pill", trendRange === days && "active")}
+                onClick={() => setTrendRange(days as 7 | 14 | 30)}
+              >
+                近 {days} 天
+              </button>
+            ))}
+          </div>
+          <div className="toolbar-group">
+            <button type="button" className="soft-pill" onClick={() => scrollToSection("overview-insights")}>查看今日摘要</button>
+            <button type="button" className="soft-pill" onClick={() => scrollToSection("overview-trend")}>生成汇总</button>
+          </div>
         </div>
-      </header>
+      </section>
+
+      <section className="overview-stats-row">
+        {overviewStats.map((item) => (
+          <article key={item.label} className="overview-stat-card">
+            <div className="overview-stat-top">
+              <span>{item.label}</span>
+              <small>{item.icon}</small>
+            </div>
+            <strong>{item.value}</strong>
+            <p>{item.note}</p>
+          </article>
+        ))}
+      </section>
 
       <div className="overview-grid top">
-        <section className="overview-panel wide">
-          <div className="section-heading"><span>全局运行状态</span><small>先看系统有没有正常跑完，再决定看哪个分类</small></div>
+        <section className="overview-panel wide" id="overview-status">
+          <div className="section-heading"><span>运行状态</span><small>先判断今天的任务是否健康，再决定看哪个分类</small></div>
           <div className="run-summary-strip">
-            <div className="run-summary-card"><span>今日任务状态</span><strong>{todayTotals.anomalies === 0 ? "全部正常" : "部分延迟"}</strong></div>
-            <div className="run-summary-card"><span>最近一次运行</span><strong>{latestRunLabel}</strong></div>
-            <div className="run-summary-card"><span>下一次运行</span><strong>{nextRunLabel}</strong></div>
+            <div className="run-summary-card"><span>今日任务状态</span><strong>{todayTotals.anomalies === 0 ? "全部正常" : "部分延迟"}</strong><p>{todayTotals.anomalies === 0 ? "当前采集与分析链路稳定" : "建议优先排查异常分类"}</p></div>
+            <div className="run-summary-card"><span>最近一次运行</span><strong>{latestRunLabel}</strong><p>帮助判断今天的数据是否是最新批次</p></div>
+            <div className="run-summary-card"><span>下一次运行</span><strong>{nextRunLabel}</strong><p>便于安排下一轮关注和复查时间</p></div>
           </div>
           <div className="run-status-list">
             {categories.map((category) => (
               <div key={category.id} className="run-status-card">
-                <div>
+                <div className="run-status-copy">
                   <strong>{category.name}</strong>
                   <p>{category.goal}</p>
                 </div>
                 <div className="run-status-meta">
-                  <StatusBadge label={`采集${category.runStatus.collect}`} tone={category.runStatus.collect === "正常" ? "good" : category.runStatus.collect === "延迟" ? "warn" : "danger"} />
-                  <StatusBadge label={`分析${category.runStatus.analysis}`} tone={category.runStatus.analysis === "已完成" ? "good" : "warn"} />
+                  <div className="run-status-badges">
+                    <StatusBadge label={`采集${category.runStatus.collect}`} tone={category.runStatus.collect === "正常" ? "good" : category.runStatus.collect === "延迟" ? "warn" : "danger"} />
+                    <StatusBadge label={`分析${category.runStatus.analysis}`} tone={category.runStatus.analysis === "已完成" ? "good" : "warn"} />
+                  </div>
                   <small>{category.timeline[0]?.totalCount ?? 0} 条内容</small>
+                  <button type="button" className="inline-link-button" onClick={() => onEnterCategory(category.id)}>进入详情</button>
                 </div>
               </div>
             ))}
           </div>
         </section>
 
-        <section className="overview-panel">
-          <div className="section-heading"><span>AI 全局洞察</span><small>帮助快速进入今天的工作状态</small></div>
-          <div className="overview-insight-list">{globalInsights.map((item) => <p key={item}>{item}</p>)}</div>
+        <section className="overview-panel" id="overview-insights">
+          <div className="section-heading"><span>AI 全局洞察</span><small>用结构化结论辅助判断，不用先读长段文字</small></div>
+          <div className="overview-insight-list">
+            {globalInsights.map((item) => (
+              <article key={item.title} className="overview-insight-card">
+                <span>{item.title}</span>
+                <strong>{item.value}</strong>
+                <p>{item.note}</p>
+              </article>
+            ))}
+          </div>
+          <p className="overview-panel-footnote">系统总览页不直接展开单条内容，是为了先帮助你判断今天应该先看哪里，再进入具体分类执行。</p>
         </section>
       </div>
 
-      <section className="overview-panel">
+      <section className="overview-panel" id="overview-categories">
         <div className="section-heading"><span>分类总览</span><small>默认首页突出优先级，帮助快速判断今天先看哪里</small></div>
         <div className="overview-category-grid">
           {categories.map((category) => (
             <article key={category.id} className={cn("overview-category-card", category.priority === "高" && "priority-high")}>
-              <div className="overview-category-head"><div><strong>{category.name}</strong><p>{category.goal}</p></div><span className={cn("priority-pill", category.priority === "高" && "high", category.priority === "中" && "mid")}>优先级 {category.priority}</span></div>
-              <div className="overview-category-metrics"><span>今日内容 {category.timeline[0]?.totalCount ?? 0}</span><span>最高热度 {category.timeline[0]?.peakHeat ?? 0}</span><span>最热平台 {platformMeta[category.timeline[0]?.topPlatform ?? "douyin"].label}</span></div>
+              <div className="overview-category-head">
+                <div>
+                  <strong>{category.name}</strong>
+                  <p>{category.goal}</p>
+                </div>
+                <span className={cn("priority-pill", category.priority === "高" && "high", category.priority === "中" && "mid")}>优先级 {category.priority}</span>
+              </div>
+              <div className="overview-category-metrics">
+                <div><small>今日内容数</small><strong>{category.timeline[0]?.totalCount ?? 0}</strong></div>
+                <div><small>最高热度</small><strong>{category.timeline[0]?.peakHeat ?? 0}</strong></div>
+                <div><small>最热平台</small><strong>{platformMeta[category.timeline[0]?.topPlatform ?? "douyin"].label}</strong></div>
+              </div>
               <p className="overview-category-summary">{category.timeline[0]?.highlight}</p>
-              <button type="button" className="enter-category-button" onClick={() => onEnterCategory(category.id)}>进入分类</button>
+              <div className="overview-category-actions">
+                <button type="button" className="enter-category-button" onClick={() => onEnterCategory(category.id)}>进入分类</button>
+                <button type="button" className="secondary-action-button" onClick={() => onEnterCategory(category.id)}>查看报告</button>
+              </div>
             </article>
           ))}
         </div>
       </section>
 
       <div className="overview-grid middle">
-        <section className="overview-panel wide">
-          <div className="section-heading"><span>全局热度趋势</span><small>看今天整体热度是升是降，识别爆发日</small></div>
-          <div className="overview-trend-rail">
-            {globalTrend.map((day) => (
-              <div key={day.date} className={cn("overview-trend-card", day.peakHeat >= 90 && "burst")}>
-                <div className="overview-trend-top"><strong>{day.label}</strong><span>{day.date.slice(5)}</span></div>
-                <div className="overview-trend-metrics"><span>{day.totalCount} 条</span><span>峰值 {day.peakHeat}</span><span>均热 {day.avgHeat}</span></div>
-                <div className="overview-trend-bar"><div style={{ width: `${Math.min(100, day.peakHeat)}%` }} /></div>
+        <section className="overview-panel wide" id="overview-trend">
+          <div className="section-heading">
+            <span>趋势分析</span>
+            <small>看热度是在抬升还是回落，识别应该继续追的方向</small>
+          </div>
+          <div className="chart-toolbar">
+            <div className="toolbar-group">
+              {[7, 14, 30].map((days) => (
+                <button key={days} type="button" className={cn("soft-pill", trendRange === days && "active")} onClick={() => setTrendRange(days as 7 | 14 | 30)}>近 {days} 天</button>
+              ))}
+            </div>
+            <div className="toolbar-group">
+              {(["totalCount", "peakHeat", "averageHeat"] as OverviewTrendMetric[]).map((metric) => (
+                <button key={metric} type="button" className={cn("soft-pill", trendMetric === metric && "active")} onClick={() => setTrendMetric(metric)}>
+                  {trendLabelMap[metric]}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="trend-chart-card">
+            <div className="trend-chart-summary">
+              <div>
+                <span>当前指标</span>
+                <strong>{trendLabelMap[trendMetric]}</strong>
               </div>
-            ))}
+              <div>
+                <span>最新值</span>
+                <strong>{latestTrend}</strong>
+              </div>
+              <div>
+                <span>较昨日变化</span>
+                <strong className={cn("trend-delta", trendDelta > 0 && "up", trendDelta < 0 && "down")}>
+                  {trendDelta > 0 ? "+" : ""}{trendDelta}
+                </strong>
+              </div>
+            </div>
+            <div className="trend-chart-shell">
+              <svg viewBox="0 0 560 200" className="trend-chart-svg" aria-label="趋势图">
+                <defs>
+                  <linearGradient id="overviewTrendStroke" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stopColor="var(--accent-primary-strong)" />
+                    <stop offset="100%" stopColor="var(--accent-primary)" />
+                  </linearGradient>
+                </defs>
+                {[0, 1, 2, 3].map((index) => (
+                  <line key={index} x1="0" y1={20 + index * 45} x2="560" y2={20 + index * 45} className="trend-grid-line" />
+                ))}
+                <path d={trendPath} className="trend-chart-line" />
+              </svg>
+              <div className="trend-chart-labels">
+                {globalTrend.map((day) => (
+                  <div key={day.date}>
+                    <strong>{day.label}</strong>
+                    <span>{day.date.slice(5)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="trend-insight-row">
+              <p>今日 {trendLabelMap[trendMetric]} 较昨日{trendDelta >= 0 ? "提升" : "回落"} {Math.abs(trendDelta)}。</p>
+              <p>{topHeat[0]?.name ?? "暂无分类"} 连续处于高热区间，值得优先复盘。</p>
+              <p>{mostVolume[0]?.name ?? "暂无分类"} 的内容量最高，但仍需结合热度判断是否值得继续加码。</p>
+            </div>
           </div>
         </section>
 
         <section className="overview-panel">
-          <div className="section-heading"><span>分类排行</span><small>谁最热、谁增长最快、谁量最大</small></div>
+          <div className="section-heading"><span>排行榜</span><small>用更紧凑的方式看最值得关注的三类信号</small></div>
           <div className="ranking-list">
-            <div className="ranking-card"><strong>今日最热分类</strong><p>{topHeat[0]?.name} · 峰值 {topHeat[0]?.timeline[0]?.peakHeat}</p></div>
-            <div className="ranking-card"><strong>增长最快分类</strong><p>{fastGrowth[0]?.name} · 较昨日提升 {((fastGrowth[0]?.timeline[0]?.peakHeat ?? 0) - (fastGrowth[0]?.timeline[1]?.peakHeat ?? 0))}</p></div>
-            <div className="ranking-card"><strong>内容量最多分类</strong><p>{mostVolume[0]?.name} · {mostVolume[0]?.timeline[0]?.totalCount} 条</p></div>
+            <div className="ranking-card">
+              <span>今日最热分类</span>
+              <strong>{topHeat[0]?.name ?? "暂无"}</strong>
+              <div className="ranking-meta"><b>{topHeat[0]?.timeline[0]?.peakHeat ?? 0}</b><small>峰值热度</small></div>
+            </div>
+            <div className="ranking-card">
+              <span>增长最快分类</span>
+              <strong>{fastGrowth[0]?.name ?? "暂无"}</strong>
+              <div className="ranking-meta"><b>{((fastGrowth[0]?.timeline[0]?.peakHeat ?? 0) - (fastGrowth[0]?.timeline[1]?.peakHeat ?? 0))}</b><small>较昨日变化</small></div>
+            </div>
+            <div className="ranking-card">
+              <span>内容最多分类</span>
+              <strong>{mostVolume[0]?.name ?? "暂无"}</strong>
+              <div className="ranking-meta"><b>{mostVolume[0]?.timeline[0]?.totalCount ?? 0}</b><small>今日内容数</small></div>
+            </div>
+          </div>
+          <div className="platform-overview-grid compact">
+            {platformOverview.map((item) => (
+              <div key={item.platform} className="platform-overview-card">
+                <div className="platform-overview-head"><strong>{platformMeta[item.platform].label}</strong><span>{platformMeta[item.platform].trend}</span></div>
+                <div className="platform-overview-metrics"><span>内容 {item.count}</span><span>均热 {item.avgHeat}</span><span>爆款 {item.explosive}</span></div>
+                <div className="platform-overview-bar"><div style={{ width: `${Math.min(100, item.avgHeat)}%`, backgroundColor: platformMeta[item.platform].accent }} /></div>
+              </div>
+            ))}
           </div>
         </section>
       </div>
-
-      <section className="overview-panel">
-        <div className="section-heading"><span>平台总览</span><small>系统层面看今天更值得继续盯哪个平台</small></div>
-        <div className="platform-overview-grid">
-          {platformOverview.map((item) => (
-            <div key={item.platform} className="platform-overview-card">
-              <div className="platform-overview-head"><strong>{platformMeta[item.platform].label}</strong><span>{platformMeta[item.platform].trend}</span></div>
-              <div className="platform-overview-metrics"><span>今日内容 {item.count}</span><span>平均热度 {item.avgHeat}</span><span>爆款 {item.explosive}</span></div>
-              <div className="platform-overview-bar"><div style={{ width: `${Math.min(100, item.avgHeat)}%`, backgroundColor: platformMeta[item.platform].accent }} /></div>
-            </div>
-          ))}
-        </div>
-      </section>
 
       <WechatArticlePanel />
     </section>
@@ -2212,12 +2392,26 @@ export default function Page() {
     <main className="page-shell">
       <div className="backdrop-grid" />
       <aside className="sidebar">
-        <div className="brand-block"><span className="eyebrow">Content Ops Console</span><h1>内容监控工具</h1><p>按分类管理多平台监控任务，自动汇总热门内容并生成 AI 选题洞察。</p></div>
+        <div className="brand-block"><span className="eyebrow">Content Ops Console</span><h1>内容监控工具</h1><p>监控热点、异常与优先处理方向的内容运营后台。</p></div>
         <section className="sidebar-section">
-          <div className="section-heading"><span>导航</span><button type="button" className="ghost-button" onClick={createNewCategory}>+ 新建分类</button></div>
-          <div className="category-list">
-            <button type="button" className={cn("category-card", isSystemOverview && "active", "overview-nav-card")} onClick={() => setActiveView("system-overview")}><div><strong>系统总览</strong><p>查看所有分类的运行状态、热点分布与优先处理方向。</p></div><span>默认首页</span></button>
-            {visibleCategories.map((category) => <button key={category.id} type="button" className={cn("category-card", activeView === category.id && "active")} onClick={() => setActiveView(category.id)}><div><strong>{category.name}</strong><p>{category.goal}</p></div><span>{category.cadence}</span></button>)}
+          <div className="section-heading"><span>工作台</span><button type="button" className="ghost-button" onClick={createNewCategory}>+ 新建分类</button></div>
+          <div className="sidebar-nav-list">
+            <button type="button" className={cn("sidebar-nav-item", isSystemOverview && "active")} onClick={() => setActiveView("system-overview")}><strong>系统总览</strong><span>查看今日全局情况</span></button>
+            <button type="button" className={cn("sidebar-nav-item", !isSystemOverview && "active")} onClick={() => setActiveView(visibleCategories[0]?.id ?? "system-overview")}><strong>分类管理</strong><span>进入分类详情与内容池</span></button>
+            <button type="button" className="sidebar-nav-item" onClick={() => setActiveView("system-overview")}><strong>运行状态</strong><span>聚焦任务健康度</span></button>
+            <button type="button" className="sidebar-nav-item" onClick={() => setActiveView(visibleCategories[0]?.id ?? "system-overview")}><strong>报告中心</strong><span>查看选题分析与结果</span></button>
+            <button type="button" className="sidebar-nav-item" onClick={() => setActiveView(visibleCategories[0]?.id ?? "system-overview")}><strong>系统设置</strong><span>维护监控配置</span></button>
+          </div>
+        </section>
+        <section className="sidebar-section">
+          <div className="section-heading"><span>分类快捷入口</span><small>{visibleCategories.length} 个</small></div>
+          <div className="sidebar-shortcut-list">
+            {visibleCategories.map((category) => (
+              <button key={category.id} type="button" className={cn("sidebar-shortcut-item", activeView === category.id && "active")} onClick={() => setActiveView(category.id)}>
+                <strong>{category.name}</strong>
+                <span>{category.priority} 优先级</span>
+              </button>
+            ))}
           </div>
         </section>
         <section className="sidebar-section">
@@ -2289,19 +2483,47 @@ export default function Page() {
       </aside>
 
       <section className="main-panel">
+        <header className="page-topbar">
+          <div className="page-topbar-copy">
+            <span className="eyebrow">Dashboard</span>
+            <h2>内容监控工具</h2>
+            <p>按分类管理多平台监控任务，快速发现热点、风险与优先处理方向。</p>
+          </div>
+          <div className="page-topbar-actions">
+            <div className="toolbar-group">
+              {(["1d", "7d", "14d", "30d"] as RangeFilter[]).map((range) => (
+                <button key={range} type="button" className={cn("soft-pill", rangeFilter === range && "active")} onClick={() => setRangeFilter(range)}>
+                  {rangeMeta[range].label}
+                </button>
+              ))}
+            </div>
+            <div className="toolbar-group">
+              <button type="button" className="soft-pill" onClick={() => window.location.reload()}>刷新</button>
+              <button type="button" className="wechat-search-button" onClick={() => isSystemOverview ? scrollToSection("overview-insights") : setActiveTab("report")}>
+                {isSystemOverview ? "查看今日摘要" : "进入选题分析"}
+              </button>
+            </div>
+          </div>
+        </header>
         {isSystemOverview ? (
           <SystemOverviewPanel categories={visibleCategories.map((category) => mergeCategorySettings(category, categorySettings[category.id]))} onEnterCategory={(id) => setActiveView(id)} />
         ) : (
-          <>
-            <header className="hero-card">
+          <div className="detail-page-shell">
+            <header className="hero-card detail-hero-card">
               <div className="hero-copy">
                 <span className="eyebrow">当前分类</span>
                 <h2>{activeCategory.name}</h2>
                 <p>{activeCategory.goal}</p>
+                <div className="detail-hero-meta">
+                  <span className={cn("topic-status-pill", activeCategory.runStatus.collect === "正常" ? "analyzed" : activeCategory.runStatus.collect === "延迟" ? "ready" : "collecting")}>采集 {activeCategory.runStatus.collect}</span>
+                  <span className={cn("topic-status-pill", activeCategory.runStatus.analysis === "已完成" ? "analyzed" : "ready")}>分析 {activeCategory.runStatus.analysis}</span>
+                  <span className="detail-meta-chip">{activeCategory.cadence}</span>
+                  <span className="detail-meta-chip">{rangeMeta[rangeFilter].label}</span>
+                </div>
               </div>
-              <div className="hero-metrics"><div className="metric-card"><span>监控平台</span><strong>{activeCategory.platforms.filter((item) => item.enabled).length}</strong></div><div className="metric-card"><span>关键词</span><strong>{activeCategory.keywords.length}</strong></div><div className="metric-card"><span>对标博主</span><strong>{activeCategory.creators.length}</strong></div></div>
+              <div className="hero-metrics detail-hero-metrics"><div className="metric-card"><span>监控平台</span><strong>{activeCategory.platforms.filter((item) => item.enabled).length}</strong></div><div className="metric-card"><span>关键词</span><strong>{activeCategory.keywords.length}</strong></div><div className="metric-card"><span>对标博主</span><strong>{activeCategory.creators.length}</strong></div></div>
             </header>
-            <nav className="tab-bar">{tabOptions.map((tab) => <button key={tab.key} type="button" className={cn("tab-button", activeTab === tab.key && "active")} onClick={() => setActiveTab(tab.key)}><strong>{tab.label}</strong><span>{tab.description}</span></button>)}</nav>
+            <nav className="tab-bar detail-tab-bar">{tabOptions.map((tab) => <button key={tab.key} type="button" className={cn("tab-button", activeTab === tab.key && "active")} onClick={() => setActiveTab(tab.key)}><strong>{tab.label}</strong><span>{tab.description}</span></button>)}</nav>
             {activeTab === "content" ? (
               <section className="content-view upgraded-content-view">
                 <TopicWorkspacePanel
@@ -2327,7 +2549,7 @@ export default function Page() {
             ) : null}
             {activeTab === "report" ? <ReportTab category={activeCategory} topics={activeTopics} activeTopicId={activeTopicId} onSelectTopic={(topicId) => setActiveTopicIdByCategory((current) => ({ ...current, [activeCategory.id]: topicId }))} selectedTopicItems={selectedTopicItems} topicDraft={topicDrafts[activeCategory.id]} onTopicDraftChange={(field, value) => setTopicDrafts((current) => ({ ...current, [activeCategory.id]: { ...current[activeCategory.id], [field]: value } }))} onCreateTopic={() => void createTopicForActiveCategory()} analysisState={activeTopicAnalysisState} onRunAnalysis={() => void runTopicAnalysis()} topicFeedback={topicFeedback[activeCategory.id]} onUpdateTopic={(field, value) => void updateActiveTopic(field, value)} onDeleteTopic={() => void deleteActiveTopic()} /> : null}
             {activeTab === "settings" ? <SettingsTab draft={settingsDrafts[activeCategory.id]} onScheduleTypeChange={(value) => setSettingsDrafts((current) => ({ ...current, [activeCategory.id]: { ...current[activeCategory.id], scheduleType: value, runTime: value === "manual" ? "" : (current[activeCategory.id].runTime || "09:00") } }))} onRunTimeChange={(value) => setSettingsDrafts((current) => ({ ...current, [activeCategory.id]: { ...current[activeCategory.id], runTime: value } }))} onScheduleWeekdayChange={(value) => setSettingsDrafts((current) => ({ ...current, [activeCategory.id]: { ...current[activeCategory.id], scheduleWeekday: value } }))} onTogglePlatform={(platform) => setSettingsDrafts((current) => ({ ...current, [activeCategory.id]: { ...current[activeCategory.id], platforms: current[activeCategory.id].platforms.map((item) => item.key === platform ? { ...item, enabled: !item.enabled } : item) } }))} onKeywordAdd={() => { const value = keywordDrafts[activeCategory.id].trim(); if (!value) return; setSettingsDrafts((current) => ({ ...current, [activeCategory.id]: { ...current[activeCategory.id], keywords: Array.from(new Set([...current[activeCategory.id].keywords, value])) } })); setKeywordDrafts((current) => ({ ...current, [activeCategory.id]: "" })); }} onImportMatchedKeywords={() => void importMatchedKeywordsFromCurrentContents()} onKeywordRemove={(keyword) => setSettingsDrafts((current) => ({ ...current, [activeCategory.id]: { ...current[activeCategory.id], keywords: current[activeCategory.id].keywords.filter((item) => item !== keyword) } }))} keywordDraft={keywordDrafts[activeCategory.id]} onKeywordDraftChange={(value) => setKeywordDrafts((current) => ({ ...current, [activeCategory.id]: value }))} creatorDraft={creatorDrafts[activeCategory.id]} onCreatorDraftChange={(field, value) => setCreatorDrafts((current) => ({ ...current, [activeCategory.id]: { ...current[activeCategory.id], [field]: value } as MonitorCategory["creators"][number] }))} onCreatorAdd={() => { const draft = creatorDrafts[activeCategory.id]; if (!draft.name.trim()) return; setSettingsDrafts((current) => ({ ...current, [activeCategory.id]: { ...current[activeCategory.id], creators: [...current[activeCategory.id].creators, { ...draft, name: draft.name.trim(), style: draft.style.trim(), updateRate: draft.updateRate.trim() }] } })); setCreatorDrafts((current) => ({ ...current, [activeCategory.id]: { name: "", platform: draft.platform, style: "", updateRate: "" } })); }} onCreatorRemove={(name) => setSettingsDrafts((current) => ({ ...current, [activeCategory.id]: { ...current[activeCategory.id], creators: current[activeCategory.id].creators.filter((item) => item.name !== name) } }))} onSave={() => void saveCurrentSettings(false)} onSync={() => void saveCurrentSettings(true)} onDeleteCategory={() => void deleteActiveCategory()} deleteDisabled={visibleCategories.length <= 1} importableKeywordCount={importableMatchedKeywords.length} feedback={settingsFeedback[activeCategory.id]} categoryFeedback={categoryFeedback} loading={settingsSaving[activeCategory.id]} /> : null}
-          </>
+          </div>
         )}
       </section>
     </main>

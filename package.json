@@ -3,12 +3,12 @@
     "version":  "0.1.0",
     "private":  true,
     "scripts":  {
-                    "dev":  "next dev -p 3001",
+                    "dev":  "node scripts/next-with-port.mjs dev",
                     "build":  "next build",
-                    "start":  "next start",
+                    "start":  "node scripts/next-with-port.mjs start",
                     "lint":  "next lint",
-                    "start:local":  "next start -p 3001",
-                    "serve:local":  "next build \u0026\u0026 next start -p 3001"
+                    "start:local":  "node scripts/next-with-port.mjs start",
+                    "serve:local":  "npm run build \u0026\u0026 npm run start:local"
                 },
     "dependencies":  {
                          "better-sqlite3":  "^11.8.1",
