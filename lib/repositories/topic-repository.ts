@@ -23,6 +23,20 @@ const listTopicsStmt = db.prepare(`
   GROUP BY t.id
   ORDER BY t.updated_at DESC
 `);
+const listAllTopicsStmt = db.prepare(`
+  SELECT t.*, COUNT(tc.content_id) AS article_count
+  FROM topics t
+  LEFT JOIN topic_contents tc ON tc.topic_id = t.id
+  GROUP BY t.id
+  ORDER BY t.updated_at DESC
+`);
+const getTopicByIdStmt = db.prepare(`
+  SELECT t.*, COUNT(tc.content_id) AS article_count
+  FROM topics t
+  LEFT JOIN topic_contents tc ON tc.topic_id = t.id
+  WHERE t.id = ?
+  GROUP BY t.id
+`);
 
 const createTopicStmt = db.prepare(`
   INSERT INTO topics (id, category_id, title, description, goal, status, keywords_json, created_at, updated_at, last_analysis_at)
@@ -66,6 +80,7 @@ const saveAnalysisStmt = db.prepare(`
 `);
 
 const getAnalysisStmt = db.prepare(`SELECT * FROM topic_analysis_results WHERE topic_id = ?`);
+const listAnalysesStmt = db.prepare(`SELECT * FROM topic_analysis_results ORDER BY generated_at DESC`);
 const listTopicIdsByCategoryStmt = db.prepare(`SELECT id FROM topics WHERE category_id = ?`);
 const deleteTopicContentsStmt = db.prepare(`DELETE FROM topic_contents WHERE topic_id = ?`);
 const deleteTopicAnalysisStmt = db.prepare(`DELETE FROM topic_analysis_results WHERE topic_id = ?`);
@@ -89,6 +104,15 @@ function mapTopic(row: Record<string, unknown>): TopicCardRecord {
 
 export function listTopics(categoryId: string) {
   return (listTopicsStmt.all(categoryId) as Record<string, unknown>[]).map(mapTopic);
+}
+
+export function listAllTopics() {
+  return (listAllTopicsStmt.all() as Record<string, unknown>[]).map(mapTopic);
+}
+
+export function getTopicById(topicId: string) {
+  const row = getTopicByIdStmt.get(topicId) as Record<string, unknown> | undefined;
+  return row ? mapTopic(row) : null;
 }
 
 export function createTopic(input: {
@@ -206,5 +230,23 @@ export function getTopicAnalysis(topicId: string): TopicAnalysisResult | null {
     articleInsights: parseJson<ArticleInsight[]>(row.article_insights_json, []),
     topicInsights: parseJson<StructuredTopicInsight[]>(row.topic_insights_json, [])
   };
+}
+
+export function listTopicAnalyses() {
+  return (listAnalysesStmt.all() as Array<{
+    topic_id: string;
+    generated_at: string;
+    model: string;
+    total_articles: number;
+    article_insights_json: string;
+    topic_insights_json: string;
+  }>).map((row) => ({
+    topicId: row.topic_id,
+    generatedAt: row.generated_at,
+    model: row.model,
+    totalArticles: row.total_articles,
+    articleInsights: parseJson<ArticleInsight[]>(row.article_insights_json, []),
+    topicInsights: parseJson<StructuredTopicInsight[]>(row.topic_insights_json, [])
+  }));
 }
 

@@ -69,6 +69,20 @@ const byCategoryStmt = db.prepare(`
   GROUP BY c.id
   ORDER BY c.date DESC, c.publish_time DESC
 `);
+const allContentsStmt = db.prepare(`
+  SELECT c.*, GROUP_CONCAT(tc.topic_id) AS topic_ids
+  FROM contents c
+  LEFT JOIN topic_contents tc ON tc.content_id = c.id
+  GROUP BY c.id
+  ORDER BY c.date DESC, c.publish_time DESC
+`);
+const byIdStmt = db.prepare(`
+  SELECT c.*, GROUP_CONCAT(tc.topic_id) AS topic_ids
+  FROM contents c
+  LEFT JOIN topic_contents tc ON tc.content_id = c.id
+  WHERE c.id = ?
+  GROUP BY c.id
+`);
 const deleteTopicLinksByCategoryStmt = db.prepare(`
   DELETE FROM topic_contents
   WHERE content_id IN (SELECT id FROM contents WHERE category_id = ?)
@@ -139,6 +153,15 @@ export function listContentsByCategory(categoryId: string) {
 
 export function listContentsByTopic(topicId: string) {
   return (byTopicStmt.all(topicId) as Record<string, unknown>[]).map(mapRow);
+}
+
+export function listAllContents() {
+  return (allContentsStmt.all() as Record<string, unknown>[]).map(mapRow);
+}
+
+export function getContentById(contentId: string) {
+  const row = byIdStmt.get(contentId) as Record<string, unknown> | undefined;
+  return row ? mapRow(row) : null;
 }
 
 export function deleteContentsByCategory(categoryId: string) {
