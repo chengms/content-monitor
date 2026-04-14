@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { corsResponse } from "@/lib/cors";
 import { listOutputTopics } from "@/lib/repositories/output-repository";
 
 export const dynamic = "force-dynamic";
@@ -25,7 +26,7 @@ export async function GET(request: Request) {
     offset
   });
 
-  return NextResponse.json({
+  return corsResponse({
     items: result.items,
     pagination: {
       total: result.total,
