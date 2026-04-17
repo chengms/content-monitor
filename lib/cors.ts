@@ -1,3 +1,5 @@
+import { NextResponse } from "next/server";
+
 /**
  * Allowed origins for cross-origin requests from DataMaker frontend.
  */
