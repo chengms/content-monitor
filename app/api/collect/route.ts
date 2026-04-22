@@ -156,6 +156,10 @@ export async function POST(request: Request) {
 
     const settings = getCategorySettings(categoryId);
 
+    if (!settings) {
+      return NextResponse.json({ error: "分类不存在。" }, { status: 404 });
+    }
+
     if (!settings.keywords || settings.keywords.length === 0) {
       return NextResponse.json({ error: "当前分类还没有设置关键词，请先在监控设置中添加关键词。" }, { status: 400 });
     }
@@ -165,9 +169,10 @@ export async function POST(request: Request) {
     }
 
     // 启动爬取工作流
+    const platformKeys = settings.platforms.map((p) => p.key);
     const { jobId, discoveredCount, fetchedCount } = await runWorkflow(
       settings.keywords,
-      settings.platforms,
+      platformKeys,
       20,
     );
 
@@ -211,7 +216,7 @@ export async function POST(request: Request) {
       matchedKeywords: settings.keywords.filter((kw) =>
         article.title.includes(kw) || article.content_text.includes(kw),
       ),
-      matchedCreators: settings.creators?.filter((c) => c.name === article.account_name) ?? [],
+      matchedCreators: settings.creators?.filter((c) => c.name === article.account_name).map((c) => c.name) ?? [],
       aiTags: [],
       sourceType: "keyword" as const,
       defaultStatus: "candidate" as const,
